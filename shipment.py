@@ -114,7 +114,6 @@ if sku_query.strip():
 
 # -------------------- Filter Function --------------------
 def apply_filters(df, date_col):
-    """根据搜索条件和筛选项过滤数据"""
     filtered = df.copy()
     mask = pd.Series([True] * len(filtered))
 
@@ -144,7 +143,6 @@ backorder_filtered = apply_filters(backorder_df, "Req Date")
 
 # -------------------- Highlight Function --------------------
 def highlight_columns(df):
-    """高亮特定月份和季度列"""
     yellow_cols = [c for c in df.columns if ("NOV" in c or "DEC" in c or "Q2" in c)]
     green_cols = [c for c in df.columns if ("JAN" in c or "Q3" in c)]
 
@@ -214,7 +212,7 @@ if has_valid_match:
                 y="Key Figure",
                 color="Quarter",
                 orientation="h",
-                title="📊 ST Model vs Quarters",
+                title="Quarterly Supply Chain Overview",
                 hover_data=["Key Figure"]
             )
             fig.update_layout(
@@ -284,4 +282,5 @@ if has_valid_match:
         st.warning("No matching SKU or ST Model found in ETA/Notes file.")
 else:
     st.warning("⚠️ No matching ST Model or SKU found. Please check your input or try different filters.")
+
 
