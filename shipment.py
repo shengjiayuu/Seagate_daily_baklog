@@ -7,9 +7,11 @@ st.set_page_config(page_title="Seagate Backlog Dashboard", layout="wide")
 st.title("📊 Seagate SKU ETA")
 
 # -------------------- 文件路径配置 --------------------
-FILE_PATH = r"C:\Users\vnjeyu\Desktop\ASI_Daily_Backlog.xlsx"
-NEW_FILE_PATH = r"C:\Users\vnjeyu\Desktop\Planning.xlsx"
-NEW_LINK_FILE_PATH = r"C:\Users\vnjeyu\Desktop\Lead_Time.xlsx"
+
+FILE_PATH = "ASI_Daily_Backlog.xlsx"
+NEW_FILE_PATH = "Planning.xlsx"
+NEW_LINK_FILE_PATH = "Lead_Time.xlsx"
+
 
 BACKORDER_SHEET = 0
 SHIPMENT_SHEET = 1
@@ -265,4 +267,5 @@ if has_valid_match:
         st.warning("No matching SKU or ST Model found in ETA/Notes file.")
 else:
     st.warning("⚠️ No matching ST Model or SKU found. Please check your input or try different filters.")
+
 
