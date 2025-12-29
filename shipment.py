@@ -7,10 +7,9 @@ st.set_page_config(page_title="Seagate Backlog Dashboard", layout="wide")
 st.title("📊 Seagate SKU ETA")
 
 # -------------------- 文件路径配置 --------------------
-
-FILE_PATH = "ASI_Daily_Backlog.xlsx"
-NEW_FILE_PATH = "Planning.xlsx"
-NEW_LINK_FILE_PATH = "Lead_Time.xlsx"
+FILE_PATH = r"C:\Users\vnjeyu\Desktop\ASI_Daily_Backlog.xlsx"
+NEW_FILE_PATH = r"C:\Users\vnjeyu\Desktop\Planning.xlsx"
+NEW_LINK_FILE_PATH = r"C:\Users\vnjeyu\Desktop\Lead_Time.xlsx"
 
 BACKORDER_SHEET = 0
 SHIPMENT_SHEET = 1
@@ -114,6 +113,7 @@ if sku_query.strip():
 
 # -------------------- Filter Function --------------------
 def apply_filters(df, date_col):
+    """根据搜索条件和筛选项过滤数据"""
     filtered = df.copy()
     mask = pd.Series([True] * len(filtered))
 
@@ -141,23 +141,6 @@ def apply_filters(df, date_col):
 shipment_filtered = apply_filters(shipment_df, "Date Ship")
 backorder_filtered = apply_filters(backorder_df, "Req Date")
 
-# -------------------- Highlight Function --------------------
-def highlight_columns(df):
-    yellow_cols = [c for c in df.columns if ("NOV" in c or "DEC" in c or "Q2" in c)]
-    green_cols = [c for c in df.columns if ("JAN" in c or "Q3" in c)]
-
-    def highlight(val, col):
-        if col in yellow_cols:
-            return 'background-color: #fff2cc'
-        elif col in green_cols:
-            return 'background-color: #e2f0d9'
-        return ''
-
-    styled = df.style.apply(lambda row: [highlight(v, col) for col, v in zip(df.columns, row)], axis=1)
-    num_cols = df.select_dtypes(include=['number']).columns
-    styled = styled.format({col: "{:.0f}" for col in num_cols})
-    return styled
-
 # -------------------- 判断是否有有效匹配 --------------------
 has_valid_match = False
 if search_query.strip() or sku_query.strip():
@@ -167,14 +150,10 @@ if search_query.strip() or sku_query.strip():
         has_valid_match = has_valid_match or bool(sku_models)
 
 # -------------------- 页面内容 --------------------
-
-
 st.markdown("---")
-
 if has_valid_match:
     # 📅 Timeline
     st.subheader("📅 Timeline")
-
     filtered_stmodel = stmodel_df.copy()
     if search_query.strip():
         filtered_stmodel = filtered_stmodel[
@@ -185,85 +164,47 @@ if has_valid_match:
             filtered_stmodel["Product ST Model Num"].isin(sku_models)
         ]
 
+    # 显示高亮表格
+    st.dataframe((filtered_stmodel), use_container_width=True)
 
-    # —— 诊断（可选）：确认当前 DataFrame 列是否完整 —— 
-    # st.write("🧪 当前 Timeline 列总数：", len(filtered_stmodel.columns))
-    # st.write("🧪 列名清单：", list(filtered_stmodel.columns))
+    # ---- Bar Chart for selected quarters ----
+    import plotly.express as px
 
-    # ✅ 显示所有列：不包裹高亮函数以避免列子集风险
-    # 如需高亮，确保 highlight_columns(df) 只做样式、不改变列集合，再换回去
-    st.dataframe(
-        filtered_stmodel,
-        use_container_width=True,
-        hide_index=False
-    )
+    wanted_cols = ["Q2 2026", "Q3 2026", "Q4 2026", "Q1 2027", "Q2 2027"]
+    available_cols = [c for c in wanted_cols if c in filtered_stmodel.columns]
 
-    # ---- Bar Chart：动态识别所有季度列 ----
-    # 规则：匹配形如 'Q1 2026' 的列名
-    quarter_cols = [
-        c for c in filtered_stmodel.columns
-        if isinstance(c, str) and re.match(r'^Q[1-4]\s\d{4}$', c.strip())
-    ]
-
-    if len(quarter_cols) == 0:
-        st.info("No quarter columns found (expected like 'Qx YYYY').")
+    if len(available_cols) == 0:
+        st.info("No matching quarter columns found.")
     else:
-        # 对季度列按 年份 + 季度进行排序，保证图例与颜色稳定
-        def q_sort_key(c: str):
-            c = c.strip()
-            q, y = c.split()  # 'Q2', '2026'
-            return (int(y), int(q[1]))  # (年份, 季度数字)
+        long_df = filtered_stmodel.melt(
+            id_vars=["Product ST Model Num", "Key Figure"],
+            value_vars=available_cols,
+            var_name="Quarter",
+            value_name="Value"
+        )
 
-        quarter_cols_sorted = sorted(quarter_cols, key=q_sort_key)
+        long_df["Value"] = pd.to_numeric(long_df["Value"], errors="coerce").fillna(0)
+        long_df = long_df[long_df["Value"] != 0]
 
-        # 转为长表
-        # 注意：id_vars 列必须存在于 filtered_stmodel
-        id_vars = []
-        if "Product ST Model Num" in filtered_stmodel.columns:
-            id_vars.append("Product ST Model Num")
-        if "Key Figure" in filtered_stmodel.columns:
-            id_vars.append("Key Figure")
-        # 如有其他维度列需要保留到长表，可在此追加
-        # id_vars += ["Your Other Dim Col"]
-
-        # 若必要 id_vars 缺失，给出提示并跳过绘图
-        if len(id_vars) == 0:
-            st.warning("Missing required id columns for chart (e.g., 'Product ST Model Num', 'Key Figure').")
+        if long_df.empty:
+            st.warning("Selected columns have no non-zero values for current filters.")
         else:
-            long_df = filtered_stmodel.melt(
-                id_vars=id_vars,
-                value_vars=quarter_cols_sorted,
-                var_name="Quarter",
-                value_name="Value"
+            fig = px.bar(
+                long_df,
+                x="Value",
+                y="Key Figure",
+                color="Quarter",
+                orientation="h",
+                title="📊 ST Model vs Quarters",
+                hover_data=["Key Figure"]
             )
-
-            # 数值化并过滤 0/空
-            long_df["Value"] = pd.to_numeric(long_df["Value"], errors="coerce").fillna(0)
-            long_df = long_df[long_df["Value"] != 0]
-
-            if long_df.empty:
-                st.warning("Selected quarter columns have no non-zero values for current filters.")
-            else:
-                # 若没有 Key Figure，则以 Product ST Model Num 为 Y 轴，以便仍能出图
-                y_axis = "Key Figure" if "Key Figure" in long_df.columns else id_vars[0]
-
-                fig = px.bar(
-                    long_df,
-                    x="Value",
-                    y=y_axis,
-                    color="Quarter",
-                    orientation="h",
-                    title="Quarterly Supply Chain Overview",
-                    hover_data=id_vars,
-                    category_orders={"Quarter": quarter_cols_sorted}
-                )
-                fig.update_layout(
-                    height=600,
-                    xaxis_title="Value",
-                    yaxis_title=y_axis,
-                    legend_title_text="Quarter"
-                )
-                st.plotly_chart(fig, use_container_width=True)
+            fig.update_layout(
+                height=600,
+                xaxis_title="Value",
+                yaxis_title="Key Figure",
+                legend_title_text="Quarter"
+            )
+            st.plotly_chart(fig, use_container_width=True)
 
     # 🚚 Shipment Details
     st.subheader("🚚 Shipment Details")
@@ -324,8 +265,4 @@ if has_valid_match:
         st.warning("No matching SKU or ST Model found in ETA/Notes file.")
 else:
     st.warning("⚠️ No matching ST Model or SKU found. Please check your input or try different filters.")
-
-
-
-
 
