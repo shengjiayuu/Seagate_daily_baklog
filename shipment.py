@@ -168,12 +168,13 @@ if search_query.strip() or sku_query.strip():
 
 # -------------------- 页面内容 --------------------
 
-markdown("---")
+
+st.markdown("---")
+
 if has_valid_match:
     # 📅 Timeline
     st.subheader("📅 Timeline")
 
-    # 复制并按条件过滤【只过滤行，不动列】
     filtered_stmodel = stmodel_df.copy()
     if search_query.strip():
         filtered_stmodel = filtered_stmodel[
@@ -183,6 +184,7 @@ if has_valid_match:
         filtered_stmodel = filtered_stmodel[
             filtered_stmodel["Product ST Model Num"].isin(sku_models)
         ]
+
 
     # —— 诊断（可选）：确认当前 DataFrame 列是否完整 —— 
     # st.write("🧪 当前 Timeline 列总数：", len(filtered_stmodel.columns))
@@ -322,6 +324,7 @@ if has_valid_match:
         st.warning("No matching SKU or ST Model found in ETA/Notes file.")
 else:
     st.warning("⚠️ No matching ST Model or SKU found. Please check your input or try different filters.")
+
 
 
 
