@@ -1,18 +1,25 @@
-import streamlit as st
+
+import re
 import pandas as pd
 import plotly.express as px
+import streamlit as st
 
 # -------------------- 页面配置 --------------------
 st.set_page_config(page_title="Seagate Backlog Dashboard", layout="wide")
 st.title("📊 Seagate SKU ETA")
 
-# -------------------- 文件路径配置 --------------------
-
+# -------------------- 文件路径（相对路径） --------------------
+# 如果文件在仓库根目录：
 FILE_PATH = "ASI_Daily_Backlog.xlsx"
 NEW_FILE_PATH = "Planning.xlsx"
 NEW_LINK_FILE_PATH = "Lead_Time.xlsx"
 
+# 如果你的文件在子文件夹（例如 data/），改成：
+# FILE_PATH = "data/ASI_Daily_Backlog.xlsx"
+# NEW_FILE_PATH = "data/Planning.xlsx"
+# NEW_LINK_FILE_PATH = "data/Lead_Time.xlsx"
 
+# -------------------- Sheet & 列映射 --------------------
 BACKORDER_SHEET = 0
 SHIPMENT_SHEET = 1
 
@@ -24,7 +31,7 @@ SHIPMENT_MAP = {
     "Ship To Country": "Ship To Country",
     "ST Model": "ST Model",
     "Delivery Shipped Qty": "Shipped Qty",
-    "House Airway Bill Num": "Tracking Number"
+    "House Airway Bill Num": "Tracking Number",
 }
 
 BACKORDER_MAP = {
@@ -34,7 +41,7 @@ BACKORDER_MAP = {
     "Ship To Country": "Ship To Country",
     "ST Model": "ST Model",
     "Order Qty": "Order Qty",
-    "Total Backlog Qty": "Backlog Qty"
+    "Total Backlog Qty": "Backlog Qty",
 }
 
 # -------------------- 缓存加载函数 --------------------
@@ -43,8 +50,10 @@ def load_excel(path, sheet=None):
     """加载 Excel 文件并返回 DataFrame"""
     try:
         df = pd.read_excel(path, sheet_name=sheet, engine="openpyxl")
+        # 如果 sheet_name=None 或为索引，pandas 可能返回 dict；此处取第一个表
         if isinstance(df, dict):
             df = list(df.values())[0]
+        # 规范列名
         df.columns = [str(c).strip() for c in df.columns]
         return df
     except Exception as e:
@@ -53,20 +62,65 @@ def load_excel(path, sheet=None):
 
 @st.cache_data
 def load_filtered_stmodel(path):
-    """加载并过滤 ST Model 数据"""
+    """
+    加载并过滤 ST Model 数据：
+    - 保留所有月份列（JAN~DEC，含类似 'JAN-24 W31-26' 前缀的列名）
+    - 保留季度列（任意包含 'Q' 的列，如 'Q3 2026'）
+    - 保留 'Product ST Model Num' 与 'Key Figure'
+    - 仅保留指定 Key Figure 的行
+    """
     df = load_excel(path)
-    keep_cols = ["Product ST Model Num", "Key Figure"] + [c for c in df.columns if c.startswith(("OCT", "NOV", "DEC", "JAN")) or "Q" in c]
-    df = df[keep_cols]
+    if df.empty:
+        return df
+
+    # 统一清理列名
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # 基准列
+    base_cols = ["Product ST Model Num", "Key Figure"]
+
+    # 月份缩写（英文）
+    month_abbr = ("JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+                  "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
+
+    # 动态识别：以月份缩写开头的列（支持 'JAN-17 W30-26' 这类）
+    month_cols = [
+        c for c in df.columns
+        if isinstance(c, str) and c.strip().upper().startswith(month_abbr)
+    ]
+
+    # 动态识别：季度列（名字里含 'Q'；若需要更严格可用正则 '^Q[1-4]\\s\\d{4}$'）
+    quarter_cols = [
+        c for c in df.columns
+        if isinstance(c, str) and ("Q" in c.upper())
+    ]
+
+    # 合并并去重，保证列存在
+    keep_cols = []
+    for col in base_cols + month_cols + quarter_cols:
+        if col in df.columns and col not in keep_cols:
+            keep_cols.append(col)
+
+    df = df[keep_cols].copy()
+
+    # 过滤 Key Figure
     valid_figures = ["Backlog", "Shipments", "SI UCD Final", "Supply Commit (Channel)"]
-    df = df[df["Key Figure"].str.strip().isin(valid_figures)]
-    df["Product ST Model Num"] = df["Product ST Model Num"].astype(str).str.strip()
+    if "Key Figure" in df.columns:
+        df = df[df["Key Figure"].astype(str).str.strip().isin(valid_figures)]
+
+    # 规范 ST 型号
+    if "Product ST Model Num" in df.columns:
+        df["Product ST Model Num"] = df["Product ST Model Num"].astype(str).str.strip()
+
     return df
 
 def load_and_prepare(sheet, rename_map):
-    """加载并重命名列，清理数据"""
+    """加载指定 sheet 并做列重命名与基础清理"""
     df = load_excel(FILE_PATH, sheet)
     if df.empty:
         return df
+
+    # 仅保留映射中存在的列
     cols = [c for c in rename_map.keys() if c in df.columns]
     df = df[cols].copy()
     df.rename(columns=rename_map, inplace=True)
@@ -89,7 +143,7 @@ shipment_df = load_and_prepare(SHIPMENT_SHEET, SHIPMENT_MAP)
 backorder_df = load_and_prepare(BACKORDER_SHEET, BACKORDER_MAP)
 link_df = load_excel(NEW_LINK_FILE_PATH)
 
-# ✅ 统一 ST Model 格式
+# ✅ 统一 ST Model / ST MODEL 格式
 for df in [link_df, shipment_df, backorder_df]:
     if "ST MODEL" in df.columns:
         df["ST MODEL"] = df["ST MODEL"].astype(str).str.strip()
@@ -105,34 +159,45 @@ with st.sidebar:
     cities = sorted(set(shipment_df["Ship To City"].dropna()) | set(backorder_df["Ship To City"].dropna()))
     country_sel = st.multiselect("Filter by Country", countries, key="filter_country")
     city_sel = st.multiselect("Filter by City", cities, key="filter_city")
+    show_debug = st.checkbox("🛠 Show debug info", value=False)
 
-# -------------------- SKU 映射 --------------------
+# -------------------- SKU -> ST MODEL 映射 --------------------
 sku_models = []
 if sku_query.strip():
     matched_rows = link_df[link_df["SKU"].astype(str).str.lower().str.contains(sku_query.lower(), na=False)]
     if not matched_rows.empty:
         sku_models = matched_rows["ST MODEL"].dropna().astype(str).str.strip().tolist()
 
-# -------------------- Filter Function --------------------
+# -------------------- 通用过滤函数 --------------------
 def apply_filters(df, date_col):
-    """根据搜索条件和筛选项过滤数据"""
+    """根据搜索和筛选条件过滤数据"""
+    if df.empty:
+        return df
+
     filtered = df.copy()
-    mask = pd.Series([True] * len(filtered))
+    mask = pd.Series([True] * len(filtered), index=filtered.index)
 
     if search_query.strip():
         q = search_query.lower()
-        mask = mask & (
-            filtered["PO#"].str.lower().str.contains(q, na=False) |
-            filtered["ST Model"].str.lower().str.contains(q, na=False)
-        )
-    if sku_models:
+        # 注意：PO# / ST Model 两列都必须存在才会参与匹配
+        conds = []
+        if "PO#" in filtered.columns:
+            conds.append(filtered["PO#"].astype(str).str.lower().str.contains(q, na=False))
+        if "ST Model" in filtered.columns:
+            conds.append(filtered["ST Model"].astype(str).str.lower().str.contains(q, na=False))
+        if conds:
+            mask = mask & conds[0]
+            for c in conds[1:]:
+                mask = mask | c  # PO# 或 ST Model 之一匹配即可
+
+    if sku_models and "ST Model" in filtered.columns:
         mask = mask & filtered["ST Model"].isin(sku_models)
 
     filtered = filtered[mask]
 
-    if country_sel:
+    if country_sel and "Ship To Country" in filtered.columns:
         filtered = filtered[filtered["Ship To Country"].isin(country_sel)]
-    if city_sel:
+    if city_sel and "Ship To City" in filtered.columns:
         filtered = filtered[filtered["Ship To City"].isin(city_sel)]
 
     if date_col in filtered.columns:
@@ -146,8 +211,8 @@ backorder_filtered = apply_filters(backorder_df, "Req Date")
 # -------------------- 判断是否有有效匹配 --------------------
 has_valid_match = False
 if search_query.strip() or sku_query.strip():
-    if search_query.strip():
-        has_valid_match = not stmodel_df[stmodel_df["Product ST Model Num"].str.lower().str.contains(search_query.lower(), na=False)].empty
+    if search_query.strip() and "Product ST Model Num" in stmodel_df.columns:
+        has_valid_match = not stmodel_df[stmodel_df["Product ST Model Num"].astype(str).str.lower().str.contains(search_query.lower(), na=False)].empty
     if sku_query.strip():
         has_valid_match = has_valid_match or bool(sku_models)
 
@@ -156,57 +221,83 @@ st.markdown("---")
 if has_valid_match:
     # 📅 Timeline
     st.subheader("📅 Timeline")
+
     filtered_stmodel = stmodel_df.copy()
-    if search_query.strip():
+    if search_query.strip() and "Product ST Model Num" in filtered_stmodel.columns:
         filtered_stmodel = filtered_stmodel[
-            filtered_stmodel["Product ST Model Num"].str.lower().str.contains(search_query.lower(), na=False)
+            filtered_stmodel["Product ST Model Num"].astype(str).str.lower().str.contains(search_query.lower(), na=False)
         ]
-    if sku_models:
+    if sku_models and "Product ST Model Num" in filtered_stmodel.columns and "ST MODEL" in link_df.columns:
+        # 若需要通过 link_df 做更强映射，也可在此追加
         filtered_stmodel = filtered_stmodel[
-            filtered_stmodel["Product ST Model Num"].isin(sku_models)
+            filtered_stmodel["Product ST Model Num"].isin(sku_models)  # 按需调整
         ]
 
-    # 显示高亮表格
-    st.dataframe((filtered_stmodel), use_container_width=True)
+    # 可选：调试输出列名
+    if show_debug:
+        st.write("🔎 Timeline 列总数：", len(filtered_stmodel.columns))
+        st.write("🔎 Timeline 列名：", list(filtered_stmodel.columns))
 
-    # ---- Bar Chart for selected quarters ----
-    import plotly.express as px
+    # ✅ 显示所有列（支持水平滚动）
+    st.dataframe(filtered_stmodel, use_container_width=True, hide_index=False)
 
-    wanted_cols = ["Q2 2026", "Q3 2026", "Q4 2026", "Q1 2027", "Q2 2027"]
-    available_cols = [c for c in wanted_cols if c in filtered_stmodel.columns]
+    # ---- Bar Chart：动态识别所有季度列 ----
+    quarter_cols = [
+        c for c in filtered_stmodel.columns
+        if isinstance(c, str) and re.match(r'^Q[1-4]\s\d{4}$', c.strip().upper())
+    ]
 
-    if len(available_cols) == 0:
-        st.info("No matching quarter columns found.")
+    if len(quarter_cols) == 0:
+        st.info("No matching quarter columns found (expected like 'Qx YYYY').")
     else:
-        long_df = filtered_stmodel.melt(
-            id_vars=["Product ST Model Num", "Key Figure"],
-            value_vars=available_cols,
-            var_name="Quarter",
-            value_name="Value"
-        )
+        def q_sort_key(c: str):
+            c = c.strip().upper()  # 'Q2 2026'
+            q, y = c.split()
+            return (int(y), int(q[1]))  # (年份, 季度)
 
-        long_df["Value"] = pd.to_numeric(long_df["Value"], errors="coerce").fillna(0)
-        long_df = long_df[long_df["Value"] != 0]
+        quarter_cols_sorted = sorted(quarter_cols, key=q_sort_key)
 
-        if long_df.empty:
-            st.warning("Selected columns have no non-zero values for current filters.")
+        # 选择 id_vars（存在才加入）
+        id_vars = []
+        if "Product ST Model Num" in filtered_stmodel.columns:
+            id_vars.append("Product ST Model Num")
+        if "Key Figure" in filtered_stmodel.columns:
+            id_vars.append("Key Figure")
+
+        if len(id_vars) == 0:
+            st.warning("Missing required id columns for chart (e.g., 'Product ST Model Num', 'Key Figure').")
         else:
-            fig = px.bar(
-                long_df,
-                x="Value",
-                y="Key Figure",
-                color="Quarter",
-                orientation="h",
-                title="📊 ST Model vs Quarters",
-                hover_data=["Key Figure"]
+            long_df = filtered_stmodel.melt(
+                id_vars=id_vars,
+                value_vars=quarter_cols_sorted,
+                var_name="Quarter",
+                value_name="Value"
             )
-            fig.update_layout(
-                height=600,
-                xaxis_title="Value",
-                yaxis_title="Key Figure",
-                legend_title_text="Quarter"
-            )
-            st.plotly_chart(fig, use_container_width=True)
+            long_df["Value"] = pd.to_numeric(long_df["Value"], errors="coerce").fillna(0)
+            long_df = long_df[long_df["Value"] != 0]
+
+            if long_df.empty:
+                st.warning("Selected quarter columns have no non-zero values for current filters.")
+            else:
+                # 如果没有 Key Figure，则以第一个 id_vars 为 Y 轴
+                y_axis = "Key Figure" if "Key Figure" in long_df.columns else id_vars[0]
+                fig = px.bar(
+                    long_df,
+                    x="Value",
+                    y=y_axis,
+                    color="Quarter",
+                    orientation="h",
+                    title="📊 ST Model vs Quarters",
+                    hover_data=id_vars,
+                    category_orders={"Quarter": quarter_cols_sorted}
+                )
+                fig.update_layout(
+                    height=600,
+                    xaxis_title="Value",
+                    yaxis_title=y_axis,
+                    legend_title_text="Quarter"
+                )
+                st.plotly_chart(fig, use_container_width=True)
 
     # 🚚 Shipment Details
     st.subheader("🚚 Shipment Details")
@@ -222,11 +313,11 @@ if has_valid_match:
     st.subheader("📌 Make NEW PO")
 
     filtered_link = link_df.copy()
-    if search_query.strip():
+    if search_query.strip() and "ST MODEL" in filtered_link.columns:
         filtered_link = filtered_link[
-            filtered_link["ST MODEL"].str.lower().str.contains(search_query.lower(), na=False)
+            filtered_link["ST MODEL"].astype(str).str.lower().str.contains(search_query.lower(), na=False)
         ]
-    if sku_query.strip():
+    if sku_query.strip() and "SKU" in filtered_link.columns:
         filtered_link = filtered_link[
             filtered_link["SKU"].astype(str).str.lower().str.contains(sku_query.lower(), na=False)
         ]
@@ -235,6 +326,7 @@ if has_valid_match:
         eta_value = str(filtered_link.iloc[0].get("ETA", "N/A"))
         note_value = str(filtered_link.iloc[0].get("Note", "No notes available"))
 
+        # ✅ 使用真实 HTML 标签（不再转义）
         st.markdown(
             f"""
             <div style="display:flex; justify-content:center; align-items:center; margin-top:20px;">
@@ -253,7 +345,6 @@ if has_valid_match:
             """,
             unsafe_allow_html=True
         )
-
         st.markdown(
             f"""
             <div style="text-align:center; margin-top:20px;">
@@ -267,5 +358,6 @@ if has_valid_match:
         st.warning("No matching SKU or ST Model found in ETA/Notes file.")
 else:
     st.warning("⚠️ No matching ST Model or SKU found. Please check your input or try different filters.")
+
 
 
