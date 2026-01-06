@@ -301,13 +301,13 @@ if has_valid_match:
 
     # 🚚 Shipment Details
     st.subheader("🚚 Shipment Details")
-    st.dataframe(shipment_filtered, use_container_width=True)
     
     shipment_display = shipment_filtered.merge(
     link_df[["ST MODEL", "SKU"]].rename(columns={"ST MODEL": "ST Model"}),
     on="ST Model",
     how="left"
 )
+    shipment_display["SKU"] = shipment_display["SKU"].astype(str)
     st.dataframe(shipment_display, use_container_width=True)
 
 
@@ -366,6 +366,7 @@ if has_valid_match:
         st.warning("No matching SKU or ST Model found in ETA/Notes file.")
 else:
     st.warning("⚠️ No matching ST Model or SKU found. Please check your input or try different filters.")
+
 
 
 
