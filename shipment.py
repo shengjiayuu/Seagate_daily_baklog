@@ -217,28 +217,45 @@ if search_query.strip() or sku_query.strip():
         has_valid_match = has_valid_match or bool(sku_models)
 
 # -------------------- 页面内容 --------------------
+    
 st.markdown("---")
 if has_valid_match:
     # 📅 Timeline
     st.subheader("📅 Timeline")
 
     filtered_stmodel = stmodel_df.copy()
+
+    # 1) 先按现有条件过滤
     if search_query.strip() and "Product ST Model Num" in filtered_stmodel.columns:
         filtered_stmodel = filtered_stmodel[
             filtered_stmodel["Product ST Model Num"].astype(str).str.lower().str.contains(search_query.lower(), na=False)
         ]
     if sku_models and "Product ST Model Num" in filtered_stmodel.columns and "ST MODEL" in link_df.columns:
-        # 若需要通过 link_df 做更强映射，也可在此追加
         filtered_stmodel = filtered_stmodel[
             filtered_stmodel["Product ST Model Num"].isin(sku_models)  # 按需调整
         ]
+
+    # 2) ✅ 在 Timeline 数据中合并 SKU（最小改动）
+    if "Product ST Model Num" in filtered_stmodel.columns and "ST MODEL" in link_df.columns and "SKU" in link_df.columns:
+        # 规范字符串，避免空格/大小写导致匹配失败
+        filtered_stmodel["Product ST Model Num"] = filtered_stmodel["Product ST Model Num"].astype(str).str.strip()
+        link_df["ST MODEL"] = link_df["ST MODEL"].astype(str).str.strip()
+        link_df["SKU"] = link_df["SKU"].astype(str).str.strip()  # 强制 SKU 为文本（General）
+
+        filtered_stmodel = filtered_stmodel.merge(
+            link_df[["ST MODEL", "SKU"]].rename(columns={"ST MODEL": "Product ST Model Num"}),
+            on="Product ST Model Num",
+            how="left"
+        )
+    else:
+        st.warning("Timeline 缺少关键列：'Product ST Model Num' 或 link_df 缺少 'ST MODEL'/'SKU'，无法合并 SKU。")
 
     # 可选：调试输出列名
     if show_debug:
         st.write("🔎 Timeline 列总数：", len(filtered_stmodel.columns))
         st.write("🔎 Timeline 列名：", list(filtered_stmodel.columns))
 
-    # ✅ 显示所有列（支持水平滚动）
+    # ✅ 显示所有列（支持水平滚动）——此时表格里已包含 SKU 列
     st.dataframe(filtered_stmodel, use_container_width=True, hide_index=False)
 
     # ---- Bar Chart：动态识别所有季度列 ----
@@ -263,6 +280,9 @@ if has_valid_match:
             id_vars.append("Product ST Model Num")
         if "Key Figure" in filtered_stmodel.columns:
             id_vars.append("Key Figure")
+        # （可选）把 SKU 放进 hover 信息
+        if "SKU" in filtered_stmodel.columns:
+            id_vars.append("SKU")
 
         if len(id_vars) == 0:
             st.warning("Missing required id columns for chart (e.g., 'Product ST Model Num', 'Key Figure').")
@@ -288,7 +308,7 @@ if has_valid_match:
                     color="Quarter",
                     orientation="h",
                     title="📊 ST Model vs Quarters",
-                    hover_data=id_vars,
+                    hover_data=id_vars,  # 悬浮信息包含 SKU（若存在）
                     category_orders={"Quarter": quarter_cols_sorted}
                 )
                 fig.update_layout(
@@ -299,16 +319,10 @@ if has_valid_match:
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
+
     # 🚚 Shipment Details
     st.subheader("🚚 Shipment Details")
-    
-    shipment_display = shipment_filtered.merge(
-    link_df[["ST MODEL", "SKU"]].rename(columns={"ST MODEL": "ST Model"}),
-    on="ST Model",
-    how="left"
-)
-    shipment_display["SKU"] = shipment_display["SKU"].astype(str)
-    st.dataframe(shipment_display, use_container_width=True)
+    st.dataframe(shipment_filtered, use_container_width=True)
 
 
     st.markdown("---")
@@ -366,6 +380,7 @@ if has_valid_match:
         st.warning("No matching SKU or ST Model found in ETA/Notes file.")
 else:
     st.warning("⚠️ No matching ST Model or SKU found. Please check your input or try different filters.")
+
 
 
 
