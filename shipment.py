@@ -324,25 +324,31 @@ if has_valid_match:
                 st.plotly_chart(fig, use_container_width=True)
 
 
+
+# -------------------- New’s Shipment (fixed, not affected by filters) --------------------
     st.markdown("---")
-    st.subheader("🆕 Today’s Shipment")
+    st.subheader("🆕Today’s Shipment")
     new_ship_df = shipment_df.copy()
     cols_to_show = [
     "PO#", "Date Ship", "ETA", "Ship To City", "Ship To Country",
     "ST Model", "Shipped Qty", "Tracking Number"]
     cols_to_show = [c for c in cols_to_show if c in new_ship_df.columns]
     if not cols_to_show:
-        st.warning("📭 当前发运数据缺少预期列，无法展示 New’s Shipment。")
+        st.warning("The shipment data is missing expected columns for New’s Shipment.")
     else:
         new_ship_df = new_ship_df[cols_to_show]
+
     if "Date Ship" in new_ship_df.columns:
         sort_key = new_ship_df["Date Ship"].fillna(pd.Timestamp.min)
-        new_ship_df = new_ship_df.assign(_sort_key=sort_key).sort_values("_sort_key", ascending=False).drop(columns="_sort_key")
+        new_ship_df = (
+            new_ship_df
+            .assign(_sort_key=sort_key)
+            .sort_values("_sort_key", ascending=False)
+            .drop(columns="_sort_key")
+        )
 
     TOP_N = 10
     new_ship_top = new_ship_df.head(TOP_N)
-
-    st.caption(f"Showing the latest {len(new_ship_top)} shipments (sorted by Date Ship, newest first)")
     st.dataframe(new_ship_top, use_container_width=True)
 
 
@@ -406,6 +412,7 @@ if has_valid_match:
         st.warning("No matching SKU or ST Model found in ETA/Notes file.")
 else:
     st.warning("⚠️ No matching ST Model or SKU found. Please check your input or try different filters.")
+
 
 
 
