@@ -250,6 +250,10 @@ if has_valid_match:
     else:
         st.warning("Timeline 缺少关键列：'Product ST Model Num' 或 link_df 缺少 'ST MODEL'/'SKU'，无法合并 SKU。")
 
+    if "SKU" in filtered_stmodel.columns:
+        cols = ["SKU"] + [c for c in filtered_stmodel.columns if c != "SKU"]
+        filtered_stmodel = filtered_stmodel[cols]
+
     # 可选：调试输出列名
     if show_debug:
         st.write("🔎 Timeline 列总数：", len(filtered_stmodel.columns))
@@ -380,6 +384,7 @@ if has_valid_match:
         st.warning("No matching SKU or ST Model found in ETA/Notes file.")
 else:
     st.warning("⚠️ No matching ST Model or SKU found. Please check your input or try different filters.")
+
 
 
 
