@@ -136,7 +136,6 @@ stmodel_df = load_filtered_stmodel(NEW_FILE_PATH)
 shipment_df = load_and_prepare(SHIPMENT_SHEET, SHIPMENT_MAP)
 backorder_df = load_and_prepare(BACKORDER_SHEET, BACKORDER_MAP)
 link_df = load_excel(NEW_LINK_FILE_PATH)
-backorder_df.sort_values("Req Date", ascending=True, inplace=True)
 
 for df in [link_df, shipment_df, backorder_df]:
     if "ST MODEL" in df.columns:
@@ -348,6 +347,7 @@ if has_valid_match:
     st.markdown("---")
     # 📦 Backorder Details
     st.subheader("📦 Backorder Details")
+    backorder_df.sort_values("Req Date", ascending=True, inplace=True)
     st.dataframe(backorder_filtered, use_container_width=True)
 
     # 📌 ETA & Notes
@@ -400,6 +400,7 @@ if has_valid_match:
         st.warning("No matching SKU or ST Model found in ETA/Notes file.")
 else:
     st.warning("⚠️ No matching ST Model or SKU found. Please check your input or try different filters.")
+
 
 
 
