@@ -136,7 +136,7 @@ stmodel_df = load_filtered_stmodel(NEW_FILE_PATH)
 shipment_df = load_and_prepare(SHIPMENT_SHEET, SHIPMENT_MAP)
 backorder_df = load_and_prepare(BACKORDER_SHEET, BACKORDER_MAP)
 link_df = load_excel(NEW_LINK_FILE_PATH)
-backorder_df.sort_values("Req Date", ascending=False)
+backorder_df.sort_values("Req Date", ascending=False, inplace=True)
 
 for df in [link_df, shipment_df, backorder_df]:
     if "ST MODEL" in df.columns:
@@ -153,7 +153,6 @@ with st.sidebar:
     cities = sorted(set(shipment_df["Ship To City"].dropna()) | set(backorder_df["Ship To City"].dropna()))
     country_sel = st.multiselect("Filter by Country", countries, key="filter_country")
     city_sel = st.multiselect("Filter by City", cities, key="filter_city")
-    show_debug = st.checkbox("🛠 Show debug info", value=False)
 
 # -------------------- SKU -> ST MODEL 映射 --------------------
 sku_models = []
@@ -406,6 +405,7 @@ if has_valid_match:
         st.warning("No matching SKU or ST Model found in ETA/Notes file.")
 else:
     st.warning("⚠️ No matching ST Model or SKU found. Please check your input or try different filters.")
+
 
 
 
