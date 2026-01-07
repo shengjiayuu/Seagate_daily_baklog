@@ -344,11 +344,13 @@ if has_valid_match:
     st.dataframe(shipment_filtered, use_container_width=True)
 
 
+ 
     st.markdown("---")
-    # 📦 Backorder Details
     st.subheader("📦 Backorder Details")
-    backorder_df.sort_values("Req Date", ascending=True, inplace=True)
+    if "Req Date" in backorder_filtered.columns:
+        backorder_filtered = backorder_filtered.sort_values("Req Date", ascending=True)
     st.dataframe(backorder_filtered, use_container_width=True)
+
 
     # 📌 ETA & Notes
     st.markdown("---")
@@ -400,6 +402,7 @@ if has_valid_match:
         st.warning("No matching SKU or ST Model found in ETA/Notes file.")
 else:
     st.warning("⚠️ No matching ST Model or SKU found. Please check your input or try different filters.")
+
 
 
 
