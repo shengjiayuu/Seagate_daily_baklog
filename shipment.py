@@ -247,11 +247,6 @@ if has_valid_match:
         cols = ["SKU"] + [c for c in filtered_stmodel.columns if c != "SKU"]
         filtered_stmodel = filtered_stmodel[cols]
 
-    # 可选：调试输出列名
-    if show_debug:
-        st.write("🔎 Timeline 列总数：", len(filtered_stmodel.columns))
-        st.write("🔎 Timeline 列名：", list(filtered_stmodel.columns))
-
     # ✅ 显示所有列（支持水平滚动）——此时表格里已包含 SKU 列
     st.dataframe(filtered_stmodel, use_container_width=True, hide_index=False)
 
@@ -405,6 +400,7 @@ if has_valid_match:
         st.warning("No matching SKU or ST Model found in ETA/Notes file.")
 else:
     st.warning("⚠️ No matching ST Model or SKU found. Please check your input or try different filters.")
+
 
 
 
