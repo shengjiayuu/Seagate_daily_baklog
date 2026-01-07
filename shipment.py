@@ -14,11 +14,6 @@ FILE_PATH = "ASI_Daily_Backlog.xlsx"
 NEW_FILE_PATH = "Planning.xlsx"
 NEW_LINK_FILE_PATH = "Lead_Time.xlsx"
 
-# 如果你的文件在子文件夹（例如 data/），改成：
-# FILE_PATH = "data/ASI_Daily_Backlog.xlsx"
-# NEW_FILE_PATH = "data/Planning.xlsx"
-# NEW_LINK_FILE_PATH = "data/Lead_Time.xlsx"
-
 # -------------------- Sheet & 列映射 --------------------
 BACKORDER_SHEET = 0
 SHIPMENT_SHEET = 1
@@ -47,7 +42,6 @@ BACKORDER_MAP = {
 # -------------------- 缓存加载函数 --------------------
 @st.cache_data
 def load_excel(path, sheet=None):
-    """加载 Excel 文件并返回 DataFrame"""
     try:
         df = pd.read_excel(path, sheet_name=sheet, engine="openpyxl")
         # 如果 sheet_name=None 或为索引，pandas 可能返回 dict；此处取第一个表
@@ -142,8 +136,8 @@ stmodel_df = load_filtered_stmodel(NEW_FILE_PATH)
 shipment_df = load_and_prepare(SHIPMENT_SHEET, SHIPMENT_MAP)
 backorder_df = load_and_prepare(BACKORDER_SHEET, BACKORDER_MAP)
 link_df = load_excel(NEW_LINK_FILE_PATH)
+backorder_df.sort_values("Req Date", ascending=True)
 
-# ✅ 统一 ST Model / ST MODEL 格式
 for df in [link_df, shipment_df, backorder_df]:
     if "ST MODEL" in df.columns:
         df["ST MODEL"] = df["ST MODEL"].astype(str).str.strip()
@@ -412,6 +406,7 @@ if has_valid_match:
         st.warning("No matching SKU or ST Model found in ETA/Notes file.")
 else:
     st.warning("⚠️ No matching ST Model or SKU found. Please check your input or try different filters.")
+
 
 
 
