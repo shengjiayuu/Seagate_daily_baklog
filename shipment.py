@@ -74,7 +74,7 @@ def load_filtered_stmodel(path):
     base_cols = ["Product ST Model Num", "Key Figure"]
 
     # 月份缩写（英文）
-    month_abbr = ("JAN", "FEB", "MAR", "APR", "MAY", "JUN",
+    month_abbr = ("MAR", "APR", "MAY", "JUN",
                   "JUL", "AUG", "SEP", "OCT", "NOV", "DEC")
 
     # 动态识别：以月份缩写开头的列（支持 'JAN-17 W30-26' 这类）
