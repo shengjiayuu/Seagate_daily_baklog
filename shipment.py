@@ -246,81 +246,9 @@ if has_valid_match:
         cols = ["SKU"] + [c for c in filtered_stmodel.columns if c != "SKU"]
         filtered_stmodel = filtered_stmodel[cols]
 
-    # ✅ 显示所有列（支持水平滚动）——此时表格里已包含 SKU 列
-    st.dataframe(filtered_stmodel, use_container_width=True, hide_index=False)
-
-    # ---- Bar Chart：动态识别所有季度列 ----
-    quarter_cols = [
-        c for c in filtered_stmodel.columns
-        if isinstance(c, str) and re.match(r'^Q[1-4]\s\d{4}$', c.strip().upper())
-    ]
-
-    if len(quarter_cols) == 0:
-        st.info("No matching quarter columns found (expected like 'Qx YYYY').")
-    else:
-        def q_sort_key(c: str):
-            c = c.strip().upper()  # 'Q2 2026'
-            q, y = c.split()
-            return (int(y), int(q[1]))  # (年份, 季度)
-
-        quarter_cols_sorted = sorted(quarter_cols, key=q_sort_key)
-
-        # 选择 id_vars（存在才加入）
-        id_vars = []
-        if "Product ST Model Num" in filtered_stmodel.columns:
-            id_vars.append("Product ST Model Num")
-        if "Key Figure" in filtered_stmodel.columns:
-            id_vars.append("Key Figure")
-        # （可选）把 SKU 放进 hover 信息
-        if "SKU" in filtered_stmodel.columns:
-            id_vars.append("SKU")
-
-        if len(id_vars) == 0:
-            st.warning("Missing required id columns for chart (e.g., 'Product ST Model Num', 'Key Figure').")
-        else:
-            long_df = filtered_stmodel.melt(
-                id_vars=id_vars,
-                value_vars=quarter_cols_sorted,
-                var_name="Quarter",
-                value_name="Value"
-            )
-            long_df["Value"] = pd.to_numeric(long_df["Value"], errors="coerce").fillna(0)
-            long_df = long_df[long_df["Value"] != 0]
-
-            if long_df.empty:
-                st.warning("Selected quarter columns have no non-zero values for current filters.")
-            else:
-                # 如果没有 Key Figure，则以第一个 id_vars 为 Y 轴
-                y_axis = "Key Figure" if "Key Figure" in long_df.columns else id_vars[0]
-                fig = px.bar(
-                    long_df,
-                    x="Value",
-                    y=y_axis,
-                    color="Quarter",
-                    orientation="h",
-                    title="📊 ST Model vs Quarters",
-                    hover_data=id_vars,  # 悬浮信息包含 SKU（若存在）
-                    category_orders={"Quarter": quarter_cols_sorted}
-                )
-                fig.update_layout(
-                    height=600,
-                    xaxis_title="Value",
-                    yaxis_title=y_axis,
-                    legend_title_text="Quarter"
-                )
-                st.plotly_chart(fig, use_container_width=True)
-
     # 🚚 Shipment Details
     st.subheader("🚚 Shipment Details")
     st.dataframe(shipment_filtered, use_container_width=True)
-
-
- 
-    st.markdown("---")
-    st.subheader("📦 Backorder Details")
-    if "Req Date" in backorder_filtered.columns:
-        backorder_filtered = backorder_filtered.sort_values("Req Date", ascending=True)
-    st.dataframe(backorder_filtered, use_container_width=True)
 
 
     # 📌 ETA & Notes
