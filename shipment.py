@@ -312,6 +312,11 @@ if has_valid_match:
     st.subheader("🚚 Shipment Details")
     st.dataframe(shipment_filtered, use_container_width=True)
 
+    st.markdown("---")
+    st.subheader("📦 Backorder Details")
+    if "Req Date" in backorder_filtered.columns:
+        backorder_filtered = backorder_filtered.sort_values("Req Date", ascending=True)
+    st.dataframe(backorder_filtered, use_container_width=True)
 
     # 📌 ETA & Notes
     st.markdown("---")
